@@ -16,10 +16,10 @@ Keep the template generic, secure, and immediately usable: branch model, workflo
 
 ## Branch and PR policy
 
-- Lifecycle branches (`feature/*`, `bug/*`, `doc/*`, `chore/*`) target `dev`.
+- `dev` is the default branch; lifecycle branches (`feature/*`, `bug/*`, `doc/*`, `chore/*`) target it.
 - Promotion happens from `dev` to `next`.
 - Releases land from `next` to `main`.
-- `main`, `dev`, and `next` should stay protected and non-deletable.
+- `main` is read-only except for the generated repository's explicitly configured owner and Actions bypasses.
 
 If this file and the automation diverge, treat `.github/LIFECYCLE.md` and `.github/BRANCH-AND-RELEASE-POLICY.md` as the source of truth.
 

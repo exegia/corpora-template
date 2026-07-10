@@ -42,11 +42,12 @@ The important flows in this repository are operational:
 
 The default template lifecycle is:
 
-- lifecycle branches → `dev`
+- lifecycle branches → `dev` (the default branch)
 - `dev` → `next`
 - `next` → `main`
 
-Use conventional commits where possible so `release-tag.yml` can infer semantic version bumps on the `next` → `main` promotion.
+Use conventional PR titles so the `dev` candidate and `main` release tags can infer semantic version
+bumps. Treat `main` as read-only except for explicitly configured owner and GitHub Actions bypasses.
 
 If you edit agentic workflow source files in `.github/workflows/*.md`, recompile before finishing:
 

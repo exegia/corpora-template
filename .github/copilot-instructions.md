@@ -32,10 +32,10 @@ This repository is a template for future repositories. The important surfaces ar
 
 ### Branching conventions
 
-- Lifecycle branches target `dev`.
+- `dev` is the default branch; lifecycle branches target it.
 - Promotion happens from `dev` to `next`.
 - Release happens from `next` to `main`.
-- `main`, `dev`, and `next` should remain protected and non-deletable.
+- `main` is read-only except for explicitly configured owner and GitHub Actions bypass actors.
 
 ### Integration conventions
 
