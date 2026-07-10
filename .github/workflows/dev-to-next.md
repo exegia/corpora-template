@@ -52,8 +52,8 @@ self-describing:
 
 1. **CHANGELOG** — add/update an entry summarizing the features and fixes merged into `dev` since
    the last release (group by feature; reference the issues/PRs). Create `CHANGELOG.md` if absent.
-   Use a top-level `## [Unreleased]` heading for the in-progress entry. The release PR must
-   rename that heading to `## [vX.Y.Z] - YYYY-MM-DD` before it is merged to `main`. Write
+   Use a top-level `## [Unreleased]` heading for the in-progress entry. This workflow must rename
+   that heading to `## [vX.Y.Z] - YYYY-MM-DD` in the `dev → next` PR before it is merged. Write
    commit bullets using conventional-commit prefixes (`feat:`, `fix:`, `docs:`, `chore:`) since
    the tag workflow derives the version bump from those same prefixes.
 2. **README.md** — update only what the new features actually changed (setup steps, feature list,

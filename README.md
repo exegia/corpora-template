@@ -50,8 +50,9 @@ By default:
 variables `INSTALL_COMMAND`, `TEST_COMMAND`, `BUILD_COMMAND`, `CONTAINER_REGISTRY`,
 `CONTAINER_IMAGE`, `CONTAINER_REGISTRY_USERNAME`, `PREVIEW_DEPLOY_COMMAND`, and
 `PRODUCTION_DEPLOY_COMMAND` for the generated
-application. Use the `preview` and `production` environments to hold secrets such as
-`CONTAINER_REGISTRY_PASSWORD` and `VERCEL_TOKEN`; no deployment occurs until a command is configured.
+application. Use the `preview` and `production` environments to hold the
+`CONTAINER_REGISTRY_PASSWORD` and `VERCEL_TOKEN` secrets; no deployment occurs until a command is
+configured.
 
 If you change the branch model, update the policy docs, workflow triggers, and agent instruction files together.
 

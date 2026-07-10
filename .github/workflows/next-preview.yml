@@ -38,9 +38,10 @@ jobs:
             fi
           done
       - name: Build and push configured container image
-        if: env.CONTAINER_IMAGE != '' && env.CONTAINER_REGISTRY != '' && env.CONTAINER_REGISTRY_USERNAME != '' && env.CONTAINER_REGISTRY_PASSWORD != ''
+        if: env.CONTAINER_IMAGE != '' && env.CONTAINER_REGISTRY != '' && env.CONTAINER_REGISTRY_USERNAME != ''
         run: |
           set -euo pipefail
+          test -n "$CONTAINER_REGISTRY_PASSWORD"
           image="${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}:${GITHUB_SHA}"
           printf '%s' "$CONTAINER_REGISTRY_PASSWORD" | docker login "$CONTAINER_REGISTRY" --username "$CONTAINER_REGISTRY_USERNAME" --password-stdin
           docker build --tag "$image" .
