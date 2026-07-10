@@ -44,7 +44,7 @@ jobs:
 
           # Latest stable tag (vX.Y.Z), or v0.0.0 if none. Dev candidate tags do not establish
           # the production release baseline.
-          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -Ev -- '-[0-9A-Za-z.]+' | head -n1 || true)
+          latest=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
           latest=${latest:-v0.0.0}
           base=${latest#v}
           IFS=. read -r major minor patch <<< "$base"

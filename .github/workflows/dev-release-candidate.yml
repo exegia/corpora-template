@@ -30,7 +30,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -Ev -- '-[0-9A-Za-z.]+' | head -n1 || true)
+          latest=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
           latest="${latest:-v0.0.0}"
           IFS=. read -r major minor patch <<< "${latest#v}"
           if printf '%s\n' "$TITLE" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then

@@ -23,6 +23,7 @@ jobs:
       BUILD_COMMAND: ${{ vars.BUILD_COMMAND }}
       CONTAINER_IMAGE: ${{ vars.CONTAINER_IMAGE }}
       CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+      CONTAINER_REGISTRY_USERNAME: ${{ vars.CONTAINER_REGISTRY_USERNAME }}
       PREVIEW_DEPLOY_COMMAND: ${{ vars.PREVIEW_DEPLOY_COMMAND }}
       CONTAINER_REGISTRY_PASSWORD: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -37,11 +38,11 @@ jobs:
             fi
           done
       - name: Build and push configured container image
-        if: env.CONTAINER_IMAGE != '' && env.CONTAINER_REGISTRY != '' && env.CONTAINER_REGISTRY_PASSWORD != ''
+        if: env.CONTAINER_IMAGE != '' && env.CONTAINER_REGISTRY != '' && env.CONTAINER_REGISTRY_USERNAME != '' && env.CONTAINER_REGISTRY_PASSWORD != ''
         run: |
           set -euo pipefail
           image="${CONTAINER_REGISTRY}/${CONTAINER_IMAGE}:${GITHUB_SHA}"
-          printf '%s' "$CONTAINER_REGISTRY_PASSWORD" | docker login "$CONTAINER_REGISTRY" --username "${{ github.actor }}" --password-stdin
+          printf '%s' "$CONTAINER_REGISTRY_PASSWORD" | docker login "$CONTAINER_REGISTRY" --username "$CONTAINER_REGISTRY_USERNAME" --password-stdin
           docker build --tag "$image" .
           docker push "$image"
       - name: Deploy preview

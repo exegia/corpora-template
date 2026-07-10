@@ -48,7 +48,8 @@ By default:
 
 `next-preview.yml` and `production-deploy.yml` are intentionally generic. Configure repository
 variables `INSTALL_COMMAND`, `TEST_COMMAND`, `BUILD_COMMAND`, `CONTAINER_REGISTRY`,
-`CONTAINER_IMAGE`, `PREVIEW_DEPLOY_COMMAND`, and `PRODUCTION_DEPLOY_COMMAND` for the generated
+`CONTAINER_IMAGE`, `CONTAINER_REGISTRY_USERNAME`, `PREVIEW_DEPLOY_COMMAND`, and
+`PRODUCTION_DEPLOY_COMMAND` for the generated
 application. Use the `preview` and `production` environments to hold secrets such as
 `CONTAINER_REGISTRY_PASSWORD` and `VERCEL_TOKEN`; no deployment occurs until a command is configured.
 
