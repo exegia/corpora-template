@@ -62,17 +62,34 @@ apply_ruleset() {
 
   ruleset_id="$(gh api "repos/${repo}/rulesets" --jq ".[] | select(.name==\"Protect ${branch} branch\") | .id" 2>/dev/null || true)"
 
+  local payload
+  payload="$(mktemp)"
+  cp "${file}" "${payload}"
+
+  # GitHub requires numeric IDs for ruleset bypass actors. A generated repository
+  # supplies its owner/team and GitHub App IDs as JSON, rather than inheriting IDs
+  # that belong to this template repository.
+  if [[ "${branch}" == "main" && -n "${MAIN_BYPASS_ACTORS_JSON:-}" ]]; then
+    jq --argjson actors "${MAIN_BYPASS_ACTORS_JSON}" '.bypass_actors = $actors' \
+      "${payload}" > "${payload}.next"
+    mv "${payload}.next" "${payload}"
+  fi
+
   if [[ -n "${ruleset_id}" ]]; then
-    gh api -X PUT "repos/${repo}/rulesets/${ruleset_id}" --input "${file}" >/dev/null
+    gh api -X PUT "repos/${repo}/rulesets/${ruleset_id}" --input "${payload}" >/dev/null
     echo "Updated ruleset for ${branch}."
   else
-    gh api -X POST "repos/${repo}/rulesets" --input "${file}" >/dev/null
+    gh api -X POST "repos/${repo}/rulesets" --input "${payload}" >/dev/null
     echo "Created ruleset for ${branch}."
   fi
+
+  rm -f "${payload}"
 }
 
 ensure_branch dev
 ensure_branch next
+gh repo edit "${repo}" --default-branch dev
+echo "Set dev as the default branch."
 
 for branch in main dev next; do
   apply_branch_protection "${branch}"

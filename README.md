@@ -12,8 +12,9 @@ GitHub repository template for teams that want a sane default branch model, GitH
 ## Use this template
 
 1. Create a new repository from this template.
-2. Create `dev` and `next` from `main`.
-3. Apply the branch guardrails for `main`, `dev`, and `next`.
+2. Run `.github/scripts/apply-branch-guardrails.sh` to create `dev` and `next`, make `dev` the
+   default branch, and apply guardrails.
+3. Configure the generated repository's `main` bypass actor IDs before applying guardrails.
 4. Replace the placeholders in `README.md`, `AGENTS.md`, and `CLAUDE.md`.
 5. Update `.github/copilot-instructions.md` and the validation workflows to match the real stack.
 
@@ -41,7 +42,15 @@ By default:
 1. Lifecycle branches open pull requests into `dev`.
 2. Promotion pull requests go from `dev` into `next`.
 3. Release pull requests go from `next` into `main`.
-4. `main`, `dev`, and `next` are intended to be protected and non-deletable.
+4. `main` is read-only except for configured owner and GitHub Actions bypass actors.
+
+## Deployment configuration
+
+`next-preview.yml` and `production-deploy.yml` are intentionally generic. Configure repository
+variables `INSTALL_COMMAND`, `TEST_COMMAND`, `BUILD_COMMAND`, `CONTAINER_REGISTRY`,
+`CONTAINER_IMAGE`, `PREVIEW_DEPLOY_COMMAND`, and `PRODUCTION_DEPLOY_COMMAND` for the generated
+application. Use the `preview` and `production` environments to hold secrets such as
+`CONTAINER_REGISTRY_PASSWORD` and `VERCEL_TOKEN`; no deployment occurs until a command is configured.
 
 If you change the branch model, update the policy docs, workflow triggers, and agent instruction files together.
 

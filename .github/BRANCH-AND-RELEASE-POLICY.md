@@ -10,7 +10,7 @@ This is the source of truth for the template's branch model, PR targeting rules,
 | `bug/<n>-<slug>` | Defect fix | `issue-start-branch.yml` | yes |
 | `doc/<n>-<slug>` | Documentation-only change | `issue-start-branch.yml` | yes |
 | `chore/<n>-<slug>` | CI, build, refactor, tooling | `issue-start-branch.yml` | yes |
-| `dev` | Integration branch | protected long-lived branch | yes |
+| `dev` | Integration and default branch | protected long-lived branch | yes |
 | `next` | Staging / pre-release branch | protected long-lived branch | yes |
 | `main` | Production branch | protected long-lived branch | yes |
 | `hotfix/*`, `dependabot/*`, `copilot/*`, `claude/*` | Bot and exception flows | respective bots / maintainers | exempt from branch-tag enforcement |
@@ -25,14 +25,16 @@ The lifecycle prefix is chosen from the issue's `type:*` label when `status:in-p
 
 ## Branch protection and ruleset expectations
 
-`main`, `dev`, and `next` should all be:
+`main`, `dev`, and `next` should all be non-deletable and non-force-pushable. `main` is read-only:
 
-1. non-deletable
-2. non-force-pushable
-3. review-gated
-4. status-check gated
+1. changes must arrive through an approved PR with required checks;
+2. direct updates are allowed only for explicitly configured owner and GitHub Actions bypass actors;
+3. the template does not hard-code bypass IDs because they belong to the generated repository.
 
-This template includes ruleset/bootstrap assets so those protections can be applied consistently.
+Run `.github/scripts/apply-branch-guardrails.sh` after creating a repository from the template. It
+creates `dev` and `next`, makes `dev` the default branch, and applies the rulesets. Supply
+`MAIN_BYPASS_ACTORS_JSON` with the generated repository's owner/team and GitHub App actor IDs when
+the `main` ruleset is applied.
 
 ## Branch-tag enforcement (`pr-branch-enforcement.yml`)
 
@@ -58,10 +60,17 @@ Type inference uses the same conventional-commit vocabulary as `release-tag.yml`
 
 ## Release flow: `dev → next → main`
 
-1. **Stage 8 (`dev-to-next.md`)** — when validation passes on `dev`, an agentic workflow opens a `dev → next` PR and updates release-facing docs such as `CHANGELOG.md`, `README.md`, and `CLAUDE.md`.
-2. **Stage 11 (`next-to-main-wiki.md`)** — when the `next → main` PR opens, an agentic workflow updates release documentation on the PR branch.
-3. **Merge** — a maintainer merges `next → main`.
-4. **Stage 12 (`release-tag.yml`)** — on merge, the workflow computes the next semver tag, creates a GitHub Release, and stamps `CHANGELOG.md` when present.
+1. **PR → `dev`** — CI, SemVer-title validation, and the Copilot review workflow run. Lifecycle PRs
+   are squash-merged, then `dev-release-candidate.yml` tags the squash merge.
+2. **Stage 8 (`dev-to-next.md`)** — when validation passes on `dev`, an agentic workflow opens a
+   `dev → next` PR and updates `CHANGELOG.md`, `README.md`, `CLAUDE.md`, and existing version
+   manifests.
+3. **Preview** — merging to `next` runs `next-preview.yml`, which runs configured install, test,
+   build, container, and preview deployment commands.
+4. **Release PR** — a successful preview opens a `next → main` PR. `next-to-main-wiki.md` refines
+   release documentation on that PR branch.
+5. **Release** — merging `next → main` creates the SemVer tag and GitHub Release; the published
+   release triggers the configured production deployment.
 
 ### Semantic versioning (`release-tag.yml`)
 
@@ -71,7 +80,8 @@ Type inference uses the same conventional-commit vocabulary as `release-tag.yml`
 | any `feat:` / `feature:` subject | **minor** |
 | any `fix:` subject (or default) | **patch** |
 
-If no earlier tag exists, versioning starts from `v0.0.0`.
+If no earlier tag exists, versioning starts from `v0.0.0`. Release candidates use
+`vX.Y.Z-dev.<PR-number>` and do not replace the production tag.
 
 ## Cheat sheet
 
@@ -79,16 +89,16 @@ If no earlier tag exists, versioning starts from `v0.0.0`.
 issue (type:feature) ──status:in-progress──▶ feature/123-slug
                                               │
                                               ▼
-                                  PR feature/123 → dev
+                                  PR feature/123 → dev (squash + candidate tag)
                                               │
                                               ▼  Validation green on dev
-                                  PR dev → next
+                                  PR dev → next (docs + version metadata)
                                               │
                                               ▼
-                                  PR next → main
+                                  preview CI → PR next → main
                                               │  merge
                                               ▼
-                                  tag vX.Y.Z + Release
+                                  tag vX.Y.Z + Release + production deploy
 ```
 
 ## Related files
