@@ -70,7 +70,7 @@ apply_ruleset() {
   # supplies its owner/team and GitHub App IDs as JSON, rather than inheriting IDs
   # that belong to this template repository.
   if [[ "${branch}" == "main" && -n "${MAIN_BYPASS_ACTORS_JSON:-}" ]]; then
-    jq --argjson actors "${MAIN_BYPASS_ACTORS_JSON}" '.bypass_actors = .bypass_actors + $actors' \
+    jq --argjson actors "${MAIN_BYPASS_ACTORS_JSON}" '.bypass_actors = (.bypass_actors // []) + $actors' \
       "${payload}" > "${payload}.next"
     mv "${payload}.next" "${payload}"
   fi
