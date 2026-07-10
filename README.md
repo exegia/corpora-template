@@ -12,9 +12,9 @@ GitHub repository template for teams that want a sane default branch model, GitH
 ## Use this template
 
 1. Create a new repository from this template.
-2. Run `.github/scripts/apply-branch-guardrails.sh` to create `dev` and `next`, make `dev` the
+2. Configure the generated repository's `MAIN_BYPASS_ACTORS_JSON` for the `main` ruleset bypass actors.
+3. Run `.github/scripts/apply-branch-guardrails.sh` to create `dev` and `next`, make `dev` the
    default branch, and apply guardrails.
-3. Configure the generated repository's `main` bypass actor IDs before applying guardrails.
 4. Replace the placeholders in `README.md`, `AGENTS.md`, and `CLAUDE.md`.
 5. Update `.github/copilot-instructions.md` and the validation workflows to match the real stack.
 
