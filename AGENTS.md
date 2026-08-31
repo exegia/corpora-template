@@ -13,13 +13,18 @@ Keep the template generic, secure, and immediately usable: branch model, workflo
 3. Update `README.md`, `CLAUDE.md`, and `.github/copilot-instructions.md` when workflow behavior changes.
 4. Recompile edited `.github/workflows/*.md` files with `gh aw compile`.
 5. Do not commit local-only agent state such as `.claude/`, `.agents/`, or workflow log artifacts.
+6. Never commit a credential, token, or API key — not in code, tests, fixtures, or examples. Use
+   placeholder values and keep real values in `.env`, which is gitignored.
+7. Do not bypass the secret-scanning hook with `git commit --no-verify`. If the hook fires, the
+   correct response is to remove the secret and rotate it, never to skip the check. CI runs the
+   same scan and will fail the pull request regardless.
 
 ## Branch and PR policy
 
-- Lifecycle branches (`feature/*`, `bug/*`, `doc/*`, `chore/*`) target `dev`.
+- `dev` is the default branch; lifecycle branches (`feature/*`, `bug/*`, `doc/*`, `chore/*`) target it.
 - Promotion happens from `dev` to `next`.
 - Releases land from `next` to `main`.
-- `main`, `dev`, and `next` should stay protected and non-deletable.
+- `main` is read-only except for the generated repository's explicitly configured owner and Actions bypasses.
 
 If this file and the automation diverge, treat `.github/LIFECYCLE.md` and `.github/BRANCH-AND-RELEASE-POLICY.md` as the source of truth.
 
