@@ -1,53 +1,42 @@
-# Copilot instructions for `repo-template`
+# Copilot instructions
 
-## Validation commands
+Full rules are in [`AGENTS.md`](../AGENTS.md); this is the short form. This repository is a **generic
+template** for Rust + GPUI, Python, TypeScript, React, Expo, SwiftUI and AI-agent projects.
 
-Run commands from the repository root.
+## Commands (run from the repository root)
 
-| Task | Command |
-| --- | --- |
-| Compile agentic workflows | `gh aw compile` |
-| Compile + lint generated workflows | `gh aw compile --actionlint` |
-| Show workflow status | `gh aw status` |
-| Install the secret-scanning hook | `pre-commit install` |
-| Scan working tree for secrets | `gitleaks dir .` |
+| Task                           | Command                                                        |
+| ------------------------------ | -------------------------------------------------------------- |
+| Check tools / first-time setup | `make doctor` / `make setup`                                   |
+| Format and autofix             | `make fmt`                                                     |
+| Lint, types, tests, build      | `make lint-check`, `make typecheck`, `make test`, `make build` |
+| End-to-end tests               | `make e2e`                                                     |
+| Everything CI runs on a PR     | `make ci`                                                      |
+| Test the repo's own automation | `make selftest`                                                |
+| Validate skills / instructions | `make agents-check`                                            |
+| Scan for secrets               | `make secrets-scan`                                            |
 
-This template does not assume an application stack yet. Once a generated repository has its own codebase, replace these defaults with the real install/build/lint/test commands.
+Targets detect the stack from `pyproject.toml`, `package.json`, `Cargo.toml` or `Package.swift` /
+`.xcodeproj` (`scripts/stack.sh`). Override any task with `<TASK>_CMD`, e.g. `make test TEST_CMD="..."`.
+`copilot-setup-steps.yml` prepares the same toolchains for the coding agent.
 
-## High-level architecture
+## Conventions
 
-This repository is a template for future repositories. The important surfaces are:
+- **Branches:** `<type>/<slug>` with type `feat|fix|chore|docs|ci|refactor|test|perf|build|style|revert|ai`,
+  opened as PRs into `dev` (the default branch). Promotion: `dev` -> `next` -> `release/vX.Y.Z` -> `main`.
+- **PR titles:** Conventional Commits, `feat(scope)!: summary`. They set the SemVer bump (`!` major,
+  `feat` minor, else patch). Do not edit versions, tags or `CHANGELOG.md` by hand.
+- **Workflows:** `.github/workflows/*.yml` are plain workflows; steps call `make` targets. Pin third-party
+  actions to a commit SHA with a version comment. Keep jobs least-privilege.
+- **Docs move with automation:** update `AGENTS.md`, `README.md`, and `.github/WORKFLOW.md` in the same PR.
+- **Template stays generic:** stack specifics go behind `scripts/stack.sh` or `.github/skills/`.
+- **Skills:** `.github/skills/<name>/SKILL.md`, frontmatter `name` equal to the directory and a one-line
+  `description`. `make agents-check` enforces it.
 
-- `.github/workflows/*.md`: source files for GitHub Agentic Workflows
-- `.github/workflows/*.lock.yml`: compiled workflow artifacts
-- plain workflows such as `ci.yml`, `validation.yml`, `secret-scan.yml`, `pr-base-policy.yml`, and `release-tag.yml`
-- starter docs: `README.md`, `AGENTS.md`, `CLAUDE.md`
-- repo policy docs: `.github/LIFECYCLE.md`, `.github/BRANCH-AND-RELEASE-POLICY.md`
+## Secrets
 
-## Repository-specific conventions
-
-### Workflow conventions
-
-- Treat workflow markdown as the source of truth; recompile after frontmatter changes.
-- Keep agentic jobs read-only and use safe outputs for mutations.
-- Prefer generic validation that works before downstream code exists.
-
-### Branching conventions
-
-- `dev` is the default branch; lifecycle branches target it.
-- Promotion happens from `dev` to `next`.
-- Release happens from `next` to `main`.
-- `main` is read-only except for explicitly configured owner and GitHub Actions bypass actors.
-
-### Integration conventions
-
-- `copilot-setup-steps.yml` is the bootstrap hook for GitHub Copilot coding agents.
-- `claude.yml` and `claude-code-review.yml` depend on `CLAUDE_CODE_OAUTH_TOKEN`.
-- Do not commit local-only agent state such as `.claude/`, `.agents/`, or workflow logs.
-
-### Secret conventions
-
-- Never commit credentials, tokens, or API keys — including in tests, fixtures, and examples.
-- Real values belong in `.env`, which is gitignored; commit `.env.example` with placeholders.
-- `gitleaks` runs as a pre-commit hook and as the `Secret Scan` CI workflow. Do not bypass the
-  hook with `--no-verify`; if it fires, remove and rotate the secret.
+- Never commit credentials, tokens or keys, including in tests, fixtures, docs and examples.
+- Real values belong in `.env` (gitignored); commit `.env.example` with `REPLACE_ME` placeholders.
+- `gitleaks` runs as a pre-commit hook and as the required `Secret Scan` workflow. Never use
+  `--no-verify`; if it fires, remove the secret and rotate it.
+- Do not commit `.claude/`, `.agents/`, `.codex/`, `.worktrees/` or workflow logs.

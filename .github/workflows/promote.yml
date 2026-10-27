@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: Bump for the release that will be cut from next (auto = from line count)
+        description: Bump for the release that will be cut from next (auto = from Conventional Commits since the last tag)
         default: auto
         type: choice
         options: [auto, major, minor, patch]
@@ -42,8 +42,8 @@ jobs:
           BUMP_INPUT: ${{ inputs.bump || 'auto' }}
         run: |
           set -eu
-          git config user.name  "TEMPLATE-automation[bot]"
-          git config user.email "TEMPLATE-automation[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           make bootstrap-lanes
           git fetch --quiet --force origin \
@@ -51,22 +51,20 @@ jobs:
             +refs/heads/next:refs/remotes/origin/next \
             +refs/heads/main:refs/remotes/origin/main
 
-          info="$(make -s --no-print-directory churn-info FROM=origin/next TO=origin/dev)"
-          auto_bump="$(printf '%s\n' "$info" | awk '{print $1}')"
-          churn="$(printf '%s\n' "$info" | awk '{print $4}')"
+          auto_bump="$(scripts/semver.sh bump origin/dev)"
+          if [ "$auto_bump" = none ]; then auto_bump="patch"; fi
           if [ "$BUMP_INPUT" = auto ]; then
             bump="$auto_bump"
           else
             bump="$BUMP_INPUT"
           fi
-          version="$(make -s --no-print-directory next-version BUMP="$bump")"
+          version="$(scripts/semver.sh next "$bump" origin/dev)"
 
           {
             echo "### Promote"
             echo
-            echo "- bump: \`$bump\` (input \`$BUMP_INPUT\`, auto \`$auto_bump\`)"
-            echo "- churn: $churn lines"
+            echo "- bump: \`$bump\` (input \`$BUMP_INPUT\`, from commits \`$auto_bump\`)"
             echo "- version: v$version"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          make promote-pr VERSION="$version" BUMP="$bump" CHURN="$churn"
+          make promote-pr VERSION="$version" BUMP="$bump"

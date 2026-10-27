@@ -32,7 +32,10 @@
         "require_last_push_approval": false,
         "required_approving_review_count": 0,
         "required_review_thread_resolution": true,
-        "allowed_merge_methods": ["merge"]
+        "allowed_merge_methods": [
+          "squash",
+          "merge"
+        ]
       }
     },
     {
@@ -45,6 +48,9 @@
           },
           {
             "context": "check"
+          },
+          {
+            "context": "Detect hardcoded secrets"
           }
         ],
         "strict_required_status_checks_policy": true

@@ -1,113 +1,97 @@
 # Branch & Release Policy
 
-This is the source of truth for the template's branch model, PR targeting rules, protection expectations, and release promotion flow. Read [`LIFECYCLE.md`](./LIFECYCLE.md) alongside it.
+The rules: which branches exist, what may target what, how versions are chosen, and what is protected.
+[`LIFECYCLE.md`](./LIFECYCLE.md) lists the workflow behind each stage and [`WORKFLOW.md`](./WORKFLOW.md) explains
+how to operate and bootstrap it. If anything here disagrees with the automation, fix one of them in the same PR.
 
 ## Branch model
 
-| Branch / prefix | Purpose | Created by | Lifecycle? |
-|---|---|---|---|
-| `feature/<n>-<slug>` | New capability or enhancement | `issue-start-branch.yml` | yes |
-| `bug/<n>-<slug>` | Defect fix | `issue-start-branch.yml` | yes |
-| `doc/<n>-<slug>` | Documentation-only change | `issue-start-branch.yml` | yes |
-| `chore/<n>-<slug>` | CI, build, refactor, tooling | `issue-start-branch.yml` | yes |
-| `dev` | Integration and default branch | protected long-lived branch | yes |
-| `next` | Staging / pre-release branch | protected long-lived branch | yes |
-| `main` | Production branch | protected long-lived branch | yes |
-| `hotfix/*`, `dependabot/*`, `copilot/*`, `claude/*` | Bot and exception flows | respective bots / maintainers | exempt from branch-tag enforcement |
+| Branch           | Purpose                                            | Lifetime                | Merge method into it        |
+| ---------------- | -------------------------------------------------- | ----------------------- | --------------------------- |
+| `<type>/<slug>`  | One change: feature, fix, docs, chore, ...         | short, deleted on merge | -                           |
+| `dev`            | Integration lane and **default branch**            | permanent               | squash (merge for sync PRs) |
+| `next`           | Staging: what the next release will contain        | permanent               | merge commit                |
+| `release/vX.Y.Z` | The one in-flight release; carries the new version | temporary               | squash or merge (hotfixes)  |
+| `main`           | Production; every commit is a released state       | permanent               | merge commit                |
+| `dependabot/*`   | Dependency bumps (bot-owned names)                 | short                   | squash (auto-merge)         |
 
-The lifecycle prefix is chosen from the issue's `type:*` label when `status:in-progress` is applied, so branch prefix and issue type stay aligned.
-
-## PR targeting rules (enforced by `pr-base-policy.yml`)
-
-1. **Lifecycle work targets `dev`.** PRs opened against unsupported base branches are reassigned to `dev`.
-2. **Only `dev` promotes into `next`.** Any other head branch targeting `next` is redirected back to `dev`.
-3. **Only `next` releases into `main`.** PRs into `main` from any head other than `next` are closed.
-
-## Branch protection and ruleset expectations
-
-`main`, `dev`, and `next` should all be non-deletable and non-force-pushable. `main` is read-only:
-
-1. changes must arrive through an approved PR with required checks;
-2. direct updates are allowed only for explicitly configured owner and GitHub Actions bypass actors;
-3. the template does not hard-code bypass IDs because they belong to the generated repository.
-
-Run `.github/scripts/apply-branch-guardrails.sh` after creating a repository from the template. It
-creates `dev` and `next`, makes `dev` the default branch, and applies the rulesets. Supply
-`MAIN_BYPASS_ACTORS_JSON` with the generated repository's owner/team and GitHub App actor IDs when
-the `main` ruleset is applied.
-
-## Branch-tag enforcement (`pr-branch-enforcement.yml`)
-
-When a PR is opened from a branch that is not one of the lifecycle prefixes and not an exempt automation branch, the workflow:
-
-1. infers work type from the PR title's conventional-commit prefix
-2. opens a tracking issue under the `⚙️ EPIC: Workflow` milestone
-3. comments on the PR with the tracking issue link
-
-Type inference uses the same conventional-commit vocabulary as `release-tag.yml`, so issue labels and semver signals stay aligned.
-
-## Dynamic issue title prefixes
-
-| Prefix | Label | When |
-|---|---|---|
-| `[BUG]` | `type:bug` | fix work inferred from `fix:` / `bug:` titles |
-| `[FEATURE]` | `type:feature` | feature work inferred from `feat:` titles |
-| `[DOC]` | `type:docs` | docs work inferred from `docs:` titles |
-| `[CHORE]` | `type:chore` | default for everything else |
-| `[ci-failure]` | `ci-failure, bug` | `ci-failure-diagnose.md` |
-| `[release]` | `release` | `dev-to-next.md` |
-| `[qa]` | `qa, e2e` | `pr-merged-qa-scenarios.md` |
-
-## Release flow: `dev → next → main`
-
-1. **PR → `dev`** — CI, SemVer-title validation, and the Copilot review workflow run. Lifecycle PRs
-   are squash-merged, then `dev-release-candidate.yml` tags the squash merge.
-2. **Stage 8 (`dev-to-next.md`)** — when validation passes on `dev`, an agentic workflow opens a
-   `dev → next` PR and updates `CHANGELOG.md`, `README.md`, `CLAUDE.md`, and existing version
-   manifests.
-3. **Preview** — merging to `next` runs `next-preview.yml`, which runs configured install, test,
-   build, container, and preview deployment commands.
-4. **Release PR** — a successful preview opens a `next → main` PR. `next-to-main-wiki.md` refines
-   release documentation on that PR branch.
-5. **Release** — merging `next → main` creates the SemVer tag and GitHub Release; the published
-   release triggers the configured production deployment.
-
-### Semantic versioning (`release-tag.yml`)
-
-| Signal | Bump |
-|---|---|
-| `BREAKING CHANGE` in any body, or a `<type>!:` subject | **major** |
-| any `feat:` / `feature:` subject | **minor** |
-| any `fix:` subject (or default) | **patch** |
-
-If no earlier tag exists, versioning starts from `v0.0.0`. Release candidates use
-`vX.Y.Z-dev.<PR-number>` and do not replace the production tag.
-
-## Cheat sheet
-
-```text
-issue (type:feature) ──status:in-progress──▶ feature/123-slug
-                                              │
-                                              ▼
-                                  PR feature/123 → dev (squash + candidate tag)
-                                              │
-                                              ▼  Validation green on dev
-                                  PR dev → next (docs + version metadata)
-                                              │
-                                              ▼
-                                  preview CI → PR next → main
-                                              │  merge
-                                              ▼
-                                  tag vX.Y.Z + Release + production deploy
 ```
+<type>/<slug> --> dev --> next --> release/vX.Y.Z --> main
+   squash        merge    cut        draft PR, merge    tag vX.Y.Z + GitHub Release
+```
+
+`<type>` is one of `feat fix chore docs ci refactor test perf build style revert ai`. Slugs are lowercase
+`[a-z0-9._-]`; an issue number may lead the slug (`feat/123-add-parser`). Git forbids `:` in ref names, so the
+Conventional Commit form lives in the **PR title**, not the branch.
+
+## What may target what (enforced by `make pr-guard`, the `guard` check)
+
+1. **`dev`** accepts `<type>/<slug>` heads with a Conventional Commit title.
+2. **`next`** accepts only `dev` (or `chore/sync-main-into-next`). Nobody opens feature PRs into `next`.
+3. **`main`** accepts only `release/vX.Y.Z`, and `X.Y.Z` must equal the version in the project manifests
+   (`scripts/version.sh get`), and those manifests must agree with each other.
+4. **`release/vX.Y.Z`** accepts `<type>/<slug>` hotfixes (`fix/<slug>`), same title rule as `dev`.
+5. **Stacked PRs** (`feat/b -> feat/a -> dev`) pass when both branches and the title follow the convention.
+6. `dependabot/*` heads skip the name and title rules; their titles are made conventional through
+   `commit-message.prefix` in `dependabot.yml` (`make dependabot` generates it).
+
+## Commits, titles and SemVer
+
+PR titles (which become the squash commit subject) are Conventional Commits:
+`<type>(optional-scope)!: summary`. Individual commits on a feature branch should follow the same shape; the
+`commit-msg` hook checks them locally.
+
+The next version is computed from commit subjects and bodies since the newest `vX.Y.Z` tag
+(`scripts/semver.sh`, `make bump-info`):
+
+| Signal                                                    | Bump      |
+| --------------------------------------------------------- | --------- |
+| `type!:` subject, or a `BREAKING CHANGE:` footer          | **major** |
+| any `feat:` / `feat(scope):`                              | **minor** |
+| anything else (`fix`, `perf`, `docs`, `chore`, `ai`, ...) | **patch** |
+
+- With no tag yet, versioning starts from `v0.0.0`, so the first release is `v0.1.0` (feat) or `v0.0.1`.
+- Pre-releases and `-dev.*` tags are ignored when picking the baseline.
+- Override a bump on the **Promote to next** workflow (`bump: major|minor|patch`). The chosen version is
+  stored on the promote PR as `<!-- release: vX.Y.Z -->` and honored by the cut.
+- Never hand-edit versions, `CHANGELOG.md` sections or tags; `make cut-release` writes the version into every
+  manifest it finds (`pyproject.toml`, `Cargo.toml`, `package.json`, `app.json`, Xcode `MARKETING_VERSION`,
+  or the fallback `VERSION` file) and regenerates the changelog section.
+
+## Merge methods
+
+| Into           | Allowed       | Why                                                                    |
+| -------------- | ------------- | ---------------------------------------------------------------------- |
+| `dev`          | squash, merge | One commit per feature (the PR title); merge only for sync PRs         |
+| `next`, `main` | merge only    | Squashing would collapse a release into one commit and empty the notes |
+| `release/v*`   | squash, merge | Hotfix PRs                                                             |
+
+## Required checks and protection
+
+Rulesets live in `.github/rulesets/*.json` and are applied with `make rulesets-apply`:
+
+- `main`, `dev`, `next`: no deletion, no force-push, pull request required, conversations resolved,
+  strict up-to-date status checks: **`guard`**, **`check`**, **`Detect hardcoded secrets`**
+  (+ **`package`** on `main`).
+- `release/v*`: no force-push, same checks, but creation/deletion stay allowed so automation can cut and
+  delete it.
+- `v*` tags: no deletion, no update, creation restricted to bypass actors.
+- Bypass: repository admins, plus the automation GitHub App supplied through `BYPASS_ACTORS_JSON`. Its id
+  belongs to the generated repository, so it is never committed.
+
+Drafts run only `guard`. Marking a PR **ready for review** starts `check` (hygiene + tests), and `e2e` when
+the base is `next` or `main`, or the PR has the `run-e2e` label.
+
+## Exceptions
+
+- Hotfix: a normal `fix/<slug>` PR into the in-flight `release/vX.Y.Z`; promote to `dev` follows through
+  the post-release sync PR.
+- Emergency admin bypass is possible but is a policy violation unless followed by a PR that records why.
+- Anything with `.github/workflows/` changes needs the automation App to hold the `workflows` permission,
+  or the release-branch refresh fails.
 
 ## Related files
 
-- `.github/LIFECYCLE.md`
-- `.github/workflows/pr-base-policy.yml`
-- `.github/workflows/pr-branch-enforcement.yml`
-- `.github/workflows/dev-to-next.md`
-- `.github/workflows/next-to-main-wiki.md`
-- `.github/workflows/release-tag.yml`
-- `.github/workflows/issue-start-branch.yml`
-- `.github/scripts/create-triage-labels.sh`
+`.github/LIFECYCLE.md` · `.github/WORKFLOW.md` · `.github/rulesets/` · `.github/settings.yml` ·
+`scripts/pr-guard.sh` · `scripts/semver.sh` · `scripts/version.sh` · `scripts/release.sh` ·
+`.github/workflows/pr.yml`

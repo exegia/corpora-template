@@ -73,8 +73,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          git config user.name  "TEMPLATE-automation[bot]"
-          git config user.email "TEMPLATE-automation[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           make bootstrap-lanes
           if [ "$EVENT_NAME" = "pull_request" ]; then
             make sync-lanes

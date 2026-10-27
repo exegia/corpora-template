@@ -1,117 +1,159 @@
-# `repo-template`
+# `corpora-template`
 
-GitHub repository template for teams that want a sane default branch model, GitHub Agentic Workflows, Copilot setup, Claude review/chat automation, and template-safe validation before product code exists.
+<!-- Replace this title and paragraph with your project. Keep the sections below that still apply. -->
 
-## What this template includes
+A GitHub template with the boring-but-essential parts already wired: SemVer releases driven by Conventional
+Commits, CI that adapts to your stack, secrets handling, end-to-end test hooks, and guidance for AI coding agents.
+It works the same for **Rust + GPUI, Python, TypeScript, React, Expo, SwiftUI** and projects that **build AI
+agents**, and it stays green before you have written any product code.
 
-- **Branch model:** `feature/*` / `bug/*` / `doc/*` / `chore/*` into `dev`, promotion from `dev` to `next`, and release from `next` to `main`
-- **Agentic workflows:** issue triage, branch creation, PR review, QA follow-up, promotion flows, and release documentation/tagging
-- **GitHub integrations:** Copilot setup workflow plus Claude chat/review workflows
-- **Guardrails:** branch-policy automation, protected-branch/ruleset bootstrap assets, and validation workflows that compile `gh-aw` sources
-- **Secret scanning:** a `gitleaks` pre-commit hook plus a CI gate, so credentials cannot be committed
+## What you get
 
-## Use this template
+| Area         | What is included                                                                                            |
+| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| Dev cycle    | One `make` entry point; stack auto-detection; `make doctor`, `setup`, `dev`, `fmt`, `ci`                    |
+| CI           | PR gate (`guard`, `check`, `e2e`, `package`), nightly matrix, CodeQL, dependency review                     |
+| Releases     | `dev -> next -> release/vX.Y.Z -> main`, SemVer from commits, generated changelog, tags, GitHub Releases    |
+| Publishing   | Opt-in PyPI (OIDC), npm (provenance), crates.io, EAS, custom deploy; artifacts attached to releases         |
+| Secrets      | gitleaks hook and CI gate, `.env` workflow, push to GitHub secrets, push protection on                      |
+| Repo as code | `.github/settings.yml`, branch/tag rulesets, labels, generated Dependabot config                            |
+| AI agents    | `AGENTS.md`, `CLAUDE.md`, Copilot instructions, ten skills in `.github/skills/`, validator                  |
+| Community    | Issue forms, PR template, `CODEOWNERS`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, MIT license |
+| Self-tests   | `make selftest` tests the automation scripts themselves                                                     |
 
-1. Create a new repository from this template.
-2. Configure the generated repository's `MAIN_BYPASS_ACTORS_JSON` for the `main` ruleset bypass actors.
-3. Run `.github/scripts/apply-branch-guardrails.sh` to create `dev` and `next`, make `dev` the
-   default branch, and apply guardrails.
-4. Run `pre-commit install` so the secret-scanning hook is active in your clone.
-5. Replace the placeholders in `README.md`, `AGENTS.md`, and `CLAUDE.md`.
-6. Update `.github/copilot-instructions.md` and the validation workflows to match the real stack.
+## Quick start
 
-## Validation commands
+```bash
+make doctor     # which tools are missing for the stacks detected here
+make setup      # deps, git hooks, .env, commit template, agent skill links
+make ci         # exactly what CI runs on a pull request
+```
 
-These are the only commands this template assumes before you add app code:
+With no manifest present every task is a no-op, so this passes on a fresh copy. Add `pyproject.toml`,
+`package.json`, `Cargo.toml` or `Package.swift` and the same commands start running your tools.
 
-| Task | Command |
-| --- | --- |
-| Compile agentic workflows | `gh aw compile` |
-| Compile + lint generated workflows | `gh aw compile --actionlint` |
-| Show workflow status | `gh aw status` |
-| Install the secret-scanning hook | `pre-commit install` |
-| Scan the working tree for secrets | `gitleaks dir .` |
-| Scan full history for secrets | `gitleaks git .` |
+### Use it for a new project
 
-Once a generated repository has its own app or service, replace this section with the real build, lint, and test commands.
+1. Click **Use this template** and clone the new repository.
+2. Replace this README, `LICENSE` (holder), `SECURITY.md` and `CODE_OF_CONDUCT.md` contacts
+   (`REPLACE_ME@example.com`), and `.github/CODEOWNERS`.
+3. Create the automation GitHub App and set `AUTOMATION_APP_ID` / `AUTOMATION_APP_PRIVATE_KEY`
+   ([details](.github/WORKFLOW.md#2-secrets-and-variables)).
+4. `make repo-bootstrap` creates `dev` and `next`, makes `dev` the default branch, and applies settings,
+   labels, rulesets and security features.
+5. `make setup`, add your first stack manifest, then `make dependabot`.
+6. Delete the skills and `.env.example` sections for stacks you do not use. [`TODO.md`](TODO.md) has the full checklist.
 
-## Secret scanning
+## Commands
 
-Credentials must never reach a commit. Two layers enforce this:
+Every dev and CI step is a target; run `make help` for the full list.
 
-1. **`.pre-commit-config.yaml`** runs `gitleaks` on staged changes. Install it once per clone:
+| Task                           | Command                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------ |
+| Check tools / first-time setup | `make doctor` / `make setup`                                                   |
+| Run the app                    | `make dev`                                                                     |
+| Format and autofix / verify    | `make fmt` / `make lint-check`                                                 |
+| Types, unit tests, build       | `make typecheck`, `make test`, `make build`                                    |
+| End-to-end tests, agent evals  | `make e2e`, `make eval`                                                        |
+| Everything CI runs on a PR     | `make ci`                                                                      |
+| Release artifacts              | `make pack`                                                                    |
+| Test the repo's own automation | `make selftest`                                                                |
+| Validate skills / instructions | `make agents-check`                                                            |
+| Secrets                        | `make env-init`, `env-check`, `secrets-scan`, `secrets-push`, `secrets-doctor` |
+| Versions and releases          | `make bump-info`, `next-version`, `changelog`, `cut-release`                   |
+| Repo settings                  | `make settings-apply`, `labels`, `rulesets-apply`, `dependabot`                |
 
-   ```sh
-   pre-commit install
-   ```
+Override any task for any stack: `make test TEST_CMD="pytest -x"`. Force the stack list with
+`STACKS="python node"`. Monorepos: only root manifests are detected, so set the overrides.
 
-2. **`.github/workflows/secret-scan.yml`** runs the same scan in CI — on the diff for pull
-   requests, and over full history for pushes to `dev`, `next`, and `main`.
+### Stack detection
 
-The hook is advisory: `git commit --no-verify` skips it. **CI is the actual gate**, so make
-`Secret Scan` a required status check on `dev`, `next`, and `main` in the generated repository.
+| Stack            | Detected by                    | `lint` / `typecheck`                | `test` / `e2e`                                     |
+| ---------------- | ------------------------------ | ----------------------------------- | -------------------------------------------------- |
+| Python (uv)      | `pyproject.toml`               | ruff; mypy, pyright or ty           | pytest; `tests/e2e/`, evals in `tests/evals/`      |
+| TypeScript/React | `package.json`                 | package scripts `lint`, `typecheck` | `test`; `test:e2e` or Playwright                   |
+| Expo             | `expo` dependency              | as above                            | Maestro flows in `.maestro/`                       |
+| Rust + GPUI      | `Cargo.toml`                   | `cargo fmt`, `clippy -D warnings`   | `cargo test`/nextest; `tests/e2e.rs`               |
+| SwiftUI          | `Package.swift` / `.xcodeproj` | SwiftLint, swift-format             | `swift test` / `xcodebuild`; `XCODE_UITEST_TARGET` |
 
-`.gitleaks.toml` extends the default ruleset and allowlists only the template's own placeholder
-values. Keep that allowlist narrow — it exists so `.env.example` does not trip the scanner, not to
-silence real findings. Documentation files are deliberately **not** path-allowlisted: a real
-credential pasted into a README is still a leak.
-
-`.env` is gitignored. Commit `.env.example` with placeholder values instead.
+The package manager comes from the lockfile (bun, pnpm, yarn, npm). Swift and GPUI run on macOS runners; set the
+`CI_RUNNERS` variable to change that.
 
 ## Branching and releases
 
-The template's default lifecycle is documented in:
+```text
+<type>/<slug> --squash--> dev --promote--> next --cut--> release/vX.Y.Z --draft PR--> main --> vX.Y.Z
+```
 
-- `.github/BRANCH-AND-RELEASE-POLICY.md`
-- `.github/LIFECYCLE.md`
+- Branch from `dev` as `<type>/<slug>` (`feat/123-add-parser`); types: `feat fix chore docs ci refactor test perf build style revert ai`.
+- The **PR title** must be a Conventional Commit (`feat(scope)!: summary`). It becomes the squash commit and sets
+  the bump: `!` or `BREAKING CHANGE` major, `feat` minor, anything else patch.
+- `dev` is promoted to `next` nightly or on demand; a push to `next` cuts `release/vX.Y.Z` with version files and
+  a changelog section and opens a draft PR into `main`; merging it tags and publishes the release.
 
-By default:
+Details: [policy](.github/BRANCH-AND-RELEASE-POLICY.md), [stages](.github/LIFECYCLE.md),
+[operations and troubleshooting](.github/WORKFLOW.md).
 
-1. Lifecycle branches open pull requests into `dev`.
-2. Promotion pull requests go from `dev` into `next`.
-3. Release pull requests go from `next` into `main`.
-4. `main` is read-only except for configured owner and GitHub Actions bypass actors.
+## Secrets
 
-## Deployment configuration
+Credentials must never reach a commit. Three layers:
 
-`next-preview.yml` and `production-deploy.yml` are intentionally generic. Configure repository
-variables `INSTALL_COMMAND`, `TEST_COMMAND`, `BUILD_COMMAND`, `CONTAINER_REGISTRY`,
-`CONTAINER_IMAGE`, `CONTAINER_REGISTRY_USERNAME`, `PREVIEW_DEPLOY_COMMAND`, and
-`PRODUCTION_DEPLOY_COMMAND` for the generated
-application. Use the `preview` and `production` environments to hold the
-`CONTAINER_REGISTRY_PASSWORD` and `VERCEL_TOKEN` secrets; no deployment occurs until a command is
-configured.
+1. **`.env` is gitignored**; commit `.env.example` with `REPLACE_ME` placeholders. `make env-init` creates `.env`
+   with mode 600 and `make env-check` diffs the keys.
+2. **gitleaks pre-commit hook** (`make setup` installs it). It is advisory: `--no-verify` skips it, so never use it.
+3. **`Secret Scan` workflow** is the real gate. `Detect hardcoded secrets` is a required check on `dev`, `next`
+   and `main`; GitHub push protection and secret scanning are switched on by `make settings-apply`.
 
-If you change the branch model, update the policy docs, workflow triggers, and agent instruction files together.
+If a secret leaks: rotate it first, then remove it. To load values into CI use
+`make secrets-push ENV_FILE=.env.ci ENVIRONMENT=preview` (names are shown for confirmation, values never printed).
+`.gitleaks.toml` allowlists only template placeholders; keep it narrow.
 
-## Required GitHub configuration
+## Testing
 
-| Setting / secret | Required | Purpose |
-| --- | --- | --- |
-| Repository template enabled | yes | Lets teams create new repos from this template |
-| Copilot enabled for the repo/org | yes | Powers the agentic `copilot` workflows |
-| `CLAUDE_CODE_OAUTH_TOKEN` | yes for Claude workflows | Auth for `anthropics/claude-code-action` |
-| Branch protections / rulesets | yes | Prevent deletion and direct mutation of `main`, `dev`, and `next` |
-| `Secret Scan` required status check | recommended | Blocks pull requests that introduce credentials |
+- `make test` runs fast unit and integration tests. End-to-end suites (`make e2e`) and agent evals (`make eval`)
+  are separate on purpose.
+- CI runs e2e on PRs into `next` or `main`, on PRs labelled `run-e2e`, on pushes to `next`, and nightly.
+- `make selftest` covers this repository's own scripts (`tests/template/`); it runs inside `make ci`.
 
-## Repository structure
+## AI agents
+
+| File                              | Role                                                                              |
+| --------------------------------- | --------------------------------------------------------------------------------- |
+| `AGENTS.md`                       | Canonical rules for every agent; edit this first                                  |
+| `CLAUDE.md`                       | Imports `AGENTS.md`, adds Claude Code specifics                                   |
+| `.github/copilot-instructions.md` | Short form for GitHub Copilot                                                     |
+| `.github/skills/*/SKILL.md`       | Task skills: dev cycle, release flow, secrets, e2e, one per stack, agent building |
+
+`make agents-link` symlinks `.claude/skills` and `.agents/skills` to `.github/skills` (local only);
+`make agents-check` validates skills and keeps `CLAUDE.md` importing `AGENTS.md`. Keep these files aligned with
+the automation: change them in the same PR.
+
+## Repository layout
 
 ```text
 .
+├── makefile                  one entry point for dev and CI
+├── scripts/                  stack runner, versioning, release, secrets, agent assets
+├── tests/template/           tests for scripts/ (make selftest)
 ├── .github/
-│   ├── workflows/
-│   ├── rulesets/
-│   ├── scripts/
-│   └── copilot-instructions.md
-├── AGENTS.md
-├── CLAUDE.md
-└── README.md
+│   ├── workflows/            pr, secret-scan, security, promote, next, release, publish, matrix, ...
+│   ├── actions/setup/        detects stacks, installs only their toolchains
+│   ├── rulesets/ settings.yml  branch protection and repo settings as code
+│   ├── scripts/              bootstrap-repo, apply-settings, apply-rulesets
+│   ├── skills/               agent skills
+│   ├── ISSUE_TEMPLATE/ PULL_REQUEST_TEMPLATE.md CODEOWNERS
+│   └── WORKFLOW.md LIFECYCLE.md BRANCH-AND-RELEASE-POLICY.md
+├── .devcontainer/            Codespaces and dev containers
+├── AGENTS.md CLAUDE.md
+├── CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md LICENSE TODO.md CHANGELOG.md VERSION
+└── .env.example .gitmessage .pre-commit-config.yaml .gitleaks.toml
 ```
 
-## AI collaboration files
+`VERSION` is the fallback version file while no stack manifest declares one; delete it once `pyproject.toml`,
+`Cargo.toml`, `package.json` or an Xcode project carries the version.
 
-- `CLAUDE.md`: repo-specific guidance for Claude-style coding agents
-- `AGENTS.md`: cross-agent operating rules for coding agents
-- `.github/copilot-instructions.md`: GitHub Copilot repository instructions
+## Contributing and security
 
-Keep those files aligned so local agents, GitHub-hosted agents, and humans follow the same workflow.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Report vulnerabilities privately as described in
+[SECURITY.md](SECURITY.md). Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+Licensed under the [MIT License](LICENSE).

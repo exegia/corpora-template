@@ -1,214 +1,111 @@
-# Branching and release
+# Operating the pipeline
 
-Two long-lived integration lanes (`dev`, `next`) plus `main` and the tags.
-Release branches are temporary and versioned.
+How to set up a repository generated from this template and run the release flow. Rules live in
+[`BRANCH-AND-RELEASE-POLICY.md`](./BRANCH-AND-RELEASE-POLICY.md), stages in [`LIFECYCLE.md`](./LIFECYCLE.md).
 
-```
-<type>/<slug> ──PR──> dev ──(daily/manual)──> next ──cut──> release/vX.Y.Z ──draft PR──> main
-                 (deleted on merge)         (preview)                       (deleted on release)
-```
+## 1. Bootstrap a new repository
 
-Adapted from the corpora-py CI/release model. This
-repo is currently a scaffold only: merging a release tags `vX.Y.Z`, which
-triggers `publish.yml` to ship the wheel to PyPI (once a `pypi` trusted
-publisher is configured for this repo). There is no deploy job.
+1. Create the repo from the template (`Use this template`). Push `main`.
+2. Locally: `make doctor`, then `make setup`.
+3. Create the **automation GitHub App** (see Secrets) and install it on the repo.
+4. Apply settings, labels and rulesets in one go:
 
-## Feature branches
+   ```bash
+   export BYPASS_ACTORS_JSON='[{"actor_id":<APP_ID>,"actor_type":"Integration","bypass_mode":"always"}]'
+   .github/scripts/bootstrap-repo.sh          # or: make repo-bootstrap
+   ```
 
-Named `<type>/<slug>` — `feat`, `fix`, `chore`, `docs`, `ci`, `refactor`,
-`test`, `perf`, `build`, `style`, `revert`. (Git forbids `:` in a ref name, so
-the conventional-commit form lives in the **PR title**: `feat: add parser`.)
+   It creates `dev` and `next` from `main`, makes `dev` the default branch, applies `.github/settings.yml`
+   (squash/merge options, auto-merge, delete-branch-on-merge), switches on Dependabot alerts and security
+   updates, secret scanning with push protection, and private vulnerability reporting, creates the labels, and
+   applies `.github/rulesets/*.json`. `DRY_RUN=1` previews. Re-running is safe.
 
-Branch off `dev` and open a PR back into it. While the PR is a draft only the
-guard runs; marking it **ready for review** starts the tests and the AI review
-(if `CLAUDE_CODE_OAUTH_TOKEN` is configured), which then re-run on every push.
-`guard` and `check` are required, so a red one cannot land.
+5. Set the secrets and variables below, then `make secrets-doctor`.
+6. `make dependabot` once the first stack manifest exists, then replace the `REPLACE_ME` values in
+   `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` and `.github/CODEOWNERS`.
 
-**Stacked PRs** (a feature branch based on another feature branch, not `dev`
-directly) are supported: the guard validates a `<type>/<slug>` base the same
-way it validates the head, so `feat/b → feat/a → dev` passes as long as both
-branches and the title follow the convention. Merge bottom-up; each merge
-rebases the remaining stack onto `dev`.
+Rulesets are inert until applied. `make rulesets-diff` shows what GitHub has; `make rulesets-apply` pushes the
+files, matching by `name` (keep names, or a second ruleset is created). Apply them **after** the first release
+lands if you want to seed `main` directly.
 
-When it merges the branch deletes itself (repository setting) and `dev` moves
-forward. Nothing is versioned yet.
+## 2. Secrets and variables
 
-Dependabot is the one exception: it opens `dependabot/<ecosystem>/<dep>-<ver>`
-with a `Bump X from A to B` title, and neither is renameable. `make pr-guard`
-waves those through whichever branch they target.
+Secrets (repository level unless an environment is named):
 
-## `dev` and `next`
+| Name                                              | Needed for                                          |
+| ------------------------------------------------- | --------------------------------------------------- |
+| `AUTOMATION_APP_ID`, `AUTOMATION_APP_PRIVATE_KEY` | **Required.** Opens PRs, cuts branches, pushes tags |
+| `CLAUDE_CODE_OAUTH_TOKEN`                         | Optional AI review job                              |
+| `NPM_TOKEN` (env `npm`)                           | `PUBLISH_NPM`                                       |
+| `CARGO_REGISTRY_TOKEN` (env `crates`)             | `PUBLISH_CRATES`                                    |
+| `EXPO_TOKEN` (env `eas`)                          | `EAS_BUILD_PROFILE`                                 |
+| provider tokens (env `preview` / `production`)    | `PREVIEW_DEPLOY_COMMAND` / `DEPLOY_COMMAND`         |
 
-`dev` is the working branch. Features land here all day.
+PyPI uses trusted publishing (OIDC): register the repo and the `pypi` environment on pypi.org, no secret.
 
-`next` is staging. A scheduled workflow (22:00 UTC daily) and a manual
-**Promote to next** action open a PR from `dev` into `next` when `dev` is
-ahead. That PR auto-merges once `guard` and `check` pass. Every push to
-`next` also runs the os × Python matrix.
+The GitHub App needs **Contents: write**, **Pull requests: write**, **Workflows: write** and **Metadata: read**.
+The App must be the actor that creates tags: tags pushed with `GITHUB_TOKEN` do not start `publish.yml`, and PRs
+opened with it never get their required checks.
 
-## Versioning
+Variables:
 
-The promote job classifies the bump from line-count churn
-(`git diff --shortstat origin/next...origin/dev`, insertions + deletions):
+| Name                                                       | Effect                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `CI_RUNNERS`                                               | JSON array of runner labels for PR checks (default from stack detection) |
+| `MATRIX_RUNNERS`                                           | Runners for `matrix.yml` (default ubuntu + macOS)                        |
+| `XCODE_SCHEME`, `XCODE_DESTINATION`, `XCODE_UITEST_TARGET` | Swift/Xcode builds, tests and UI tests                                   |
+| `VERSION_CMD`                                              | Replaces `scripts/version.sh set` at release cut (monorepos)             |
+| `PUBLISH_PYPI`, `PUBLISH_NPM`, `PUBLISH_CRATES`            | `true` enables that publish job                                          |
+| `EAS_BUILD_PROFILE`                                        | Queues an EAS build for that profile                                     |
+| `PREVIEW_DEPLOY_COMMAND`, `DEPLOY_COMMAND`                 | Shell run after `next` pushes / production tags                          |
+| `DEPENDENCY_REVIEW`, `CODEQL`                              | `false` switches that security job off                                   |
 
-| Churn | Makefile bump | Semver | Your label |
-|-------|---------------|--------|------------|
-| `< 100` | `patch` | `0.0.+1` | minor |
-| `100–999` | `minor` | `0.+1.0` | major |
-| `≥ 1000` | `major` | `+1.0.0` | breaking |
+Locally: `make env-init` creates `.env` (mode 600) from `.env.example`; `make env-check` diffs keys;
+`make secrets-push [ENV_FILE=.env.ci] [ENVIRONMENT=npm]` and `make secrets-vars-push` load dotenv files into
+GitHub (names are listed for confirmation, values never printed); `make secrets-list` shows names only.
 
-`workflow_dispatch` can override with `major` / `minor` / `patch`. The chosen
-version is stored on the promote PR as `<!-- release: vX.Y.Z -->` so the cut
-still knows it after `dev` and `next` are equal.
-
-The version is written into `pyproject.toml` plus `uv.lock`. Version lives
-only on `release/v*` until `main` is merged back.
-
-## Release branches
-
-Named `release/vX.Y.Z`, and always carry that version in `pyproject.toml`.
-The guard rejects a PR into `main` where the root and the branch name
-disagree.
-
-A push to `next` cuts (or refreshes) the branch from `next` plus a
-`chore(release): open vX.Y.Z` commit. Exactly one is in flight at a time: if a
-draft PR into `main` is already open, later promotions fast-forward that same
-branch and **keep its version**.
-
-Last-minute fixes can still PR `<type>/<slug>` directly into that in-flight
-`release/v*` (same guard/check as `dev`). A push refreshes the draft into
-`main`.
-
-Its ruleset deliberately omits `creation` and `deletion` rules — `make
-cut-release` has to create it and `make delete-branch` has to remove it after
-the release. The automation App is on the bypass list so it can push a
-refresh without opening a PR (once one is configured — see Secrets below).
-
-## `main`
-
-No direct pushes; PRs only from `release/vX.Y.Z`. Merging one creates the
-`vX.Y.Z` tag and GitHub Release, deletes the release branch, then opens PRs
-that merge `main` back into `next` and `dev` and deletes leftover remote
-feature / `release/v*` heads.
-
-It does **not** cut the next release branch. That waits for the next promote.
-
-Everything downstream hangs off that tag: `publish.yml` sends the wheel to
-PyPI.
-
-## Workflows
-
-| File                | Trigger                         | Does                                                |
-| ------------------- | -------------------------------- | --------------------------------------------------- |
-| `pr.yml`            | PR opened / ready / pushed       | `guard`, `check`, `package` (into main), `review` (into `dev`) |
-| `promote.yml`       | 22:00 UTC daily / manual         | bootstrap lanes, open `dev` → `next` PR, auto-merge |
-| `next.yml`          | push to `next`                   | cut/refresh `release/v*`                            |
-| `pr-merged.yml`     | push to `release/v*`             | upsert the draft release PR into `main`             |
-| `release.yml`       | PR merged into `main`            | tag, sync lanes, cleanup                            |
-| `matrix.yml`        | push to `next` / `release/v*`, weekly | os × Python coverage                          |
-| `publish.yml`       | push of a `vX.Y.Z` tag           | builds and publishes the wheel to PyPI              |
-| `automerge.yml`     | Dependabot PR                    | enables auto-merge                                  |
-
-Every step in the first five is a `make` target, so anything CI does can be
-reproduced locally.
-
-### Merge methods differ by level
-
-Feature PRs into `dev` (or an in-flight `release/v*`) are **squashed** — that
-is this repo's convention and it keeps each feature one commit. PRs into
-`next` and the release PR into `main` are a **merge**, and the rulesets
-enforce that. Squashing the release PR would collapse the whole release into
-a single commit, and `gh release --generate-notes` would have nothing to list.
-
-### The tag must not be created by `GITHUB_TOKEN`
-
-`make tag-release` should run with the automation App's token, and that is
-load-bearing rather than incidental. Events raised by `GITHUB_TOKEN` do not
-start new workflow runs, so a tag pushed with it would leave `publish.yml`
-sitting there, never firing, with nothing to indicate the release had not
-shipped.
-
-The same rule is why `pr-merged.yml`, `promote.yml` and `next.yml` run as the
-App: a PR opened by `GITHUB_TOKEN` cannot trigger further workflows, and
-`guard` and `check` are *required* checks — those PRs would never be
-mergeable.
-
-### Apply the rulesets after the first cut lands on `main`
-
-`.github/rulesets/*.json` is inert until `make rulesets-apply`. Each file's
-`bypass_actors` currently only lists the repository-admin role (`actor_id:
-5`, `RepositoryRole`) — add your automation App's Integration id to each
-file once one is set up, the same way `corpora-py` does, or the App won't be
-able to push refreshes without opening a PR for itself.
+## 3. Day to day
 
 ```bash
-make rulesets-diff     # what GitHub has now
-make rulesets-apply    # push all five files
+git switch -c feat/123-add-parser dev      # branch off dev
+make fmt && make ci                        # same thing CI runs
+gh pr create --draft --base dev --title "feat: add parser"
+gh pr ready                                # starts hygiene, test, check
 ```
 
-`make rulesets-apply` matches by `.name`, so a file must keep the name of the
-ruleset already on GitHub (`Protect main branch`, `Protect dev branch`,
-`Protect next branch`, `Protect release branches`, `Publishing`) or a second
-one is created alongside it.
+Squash-merge into `dev`. Everything after that is automatic until the release PR: review the draft PR into
+`main`, mark it ready, merge it with a merge commit.
 
-Enable **Allow auto-merge** on the repository. Promote and post-release sync
-PRs use `gh pr merge --auto`.
-
-## Bootstrap and manual operations
-
-There are no `dev` / `next` branches until the first wrapup. Run the
-**Release** workflow manually (`Actions → Release → Run workflow`) — the
-release job skips and wrapup creates the lanes. Locally:
+## 4. Manual operations
 
 ```bash
-make bootstrap-lanes
+make bump-info                  # latest tag, implied bump, next version
+make next-version BUMP=minor    # what the next tag would be called
+make changelog VERSION=1.2.0    # preview the CHANGELOG section
+make bootstrap-lanes            # create origin/dev and origin/next if missing
+make promote-pr VERSION=1.2.0 BUMP=minor
+make cut-release VERSION=1.2.0  # normally run by next.yml
+make cleanup-local              # prune local branches whose remote is gone
 ```
 
-`dev` is created from the newest `release/v*` if one exists, otherwise `main`.
-`next` is created from `main`. Then run **Promote to next** (or wait until
-22:00 UTC) once there is work on `dev`.
+`make tag-release` is idempotent: an existing tag is skipped. Everything is parameterized on `TRUNK`
+(default `main`).
 
-Other useful targets:
+## 5. Troubleshooting
 
-```bash
-make ci                            # what CI runs on a PR
-make pack                          # build the publishable wheel
-make pkg-version                   # the version in pyproject.toml
-make churn-info FROM=origin/next TO=origin/dev
-make next-version BUMP=patch       # what the next tag would be called
-make release-notes RANGE=origin/main..HEAD
-make cleanup-local                 # prune local feature / release branches
-make rulesets-diff                 # rulesets GitHub actually has
-make rulesets-apply                # push .github/rulesets/*.json
-```
+| Symptom                                     | Cause and fix                                                                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `guard` fails on the title                  | Use `<type>(scope)!: summary`; edit the PR title, it re-runs on `edited`                                  |
+| Required `check` never appears              | PR is still a draft, or it was opened with `GITHUB_TOKEN` instead of the App                              |
+| `promote` / `next` fail at their first step | `AUTOMATION_APP_ID` / `AUTOMATION_APP_PRIVATE_KEY` missing: `make secrets-doctor`                         |
+| Tag exists but `publish.yml` did not run    | The tag was pushed with `GITHUB_TOKEN`; create it as the App                                              |
+| Scheduled workflows not firing              | They run from the default branch; make sure `dev` has the files                                           |
+| `guard` says manifests disagree             | `scripts/version.sh check` lists them; delete the stale `VERSION` file once a real manifest has a version |
+| Cut-release cannot push workflow changes    | Grant the App **Workflows: write**                                                                        |
+| Hook fired on a secret                      | Remove it, rotate it, never `--no-verify`; see `skills/secrets-hygiene`                                   |
 
-`make tag-release` is idempotent — a tag already released is skipped, not an
-error.
+## 6. Template maintenance
 
-Everything is parameterised on `TRUNK`, so a one-off against a different trunk
-is `make pr-guard TRUNK=some-branch ...`.
-
-Scheduled workflows are read from the **default branch**. `promote.yml` will
-not fire on a cron until this file has shipped to `main`.
-
-## Secrets
-
-| Name                                               | Where            | Used by                     |
-| --------------------------------------------------- | ---------------- | --------------------------- |
-| `AUTOMATION_APP_ID` / `AUTOMATION_APP_PRIVATE_KEY`   | repo or org      | opening PRs, branches, tags |
-| `CLAUDE_CODE_OAUTH_TOKEN`                            | repo or org      | the AI review (optional)    |
-
-Neither is set up yet on this scaffold. Without the automation App secrets,
-`promote.yml`, `next.yml`, `pr-merged.yml` and the `wrapup` job in
-`release.yml` will fail at their first step — a PR opened with `GITHUB_TOKEN`
-cannot trigger further workflows, so the release PR's own checks would never
-start. Set these up (a small GitHub App with `contents: write` +
-`pull_requests: write`, installed on this repo) before relying on the
-automated promote/release flow.
-
-PyPI needs no secret once set up — `publish.yml` uses OIDC trusted publishing
-against the `pypi` environment. **That binding names the workflow file**, so
-renaming `publish.yml` breaks it until the publisher is re-pointed on PyPI.
-
-Without `CLAUDE_CODE_OAUTH_TOKEN` the review job skips with a note in the job
-summary rather than failing.
+`make selftest` runs `tests/template/` (stack detection, SemVer, versions, PR guard, secrets, changelog, agent
+assets). Keep it green when you change `scripts/`. Lint workflows with `actionlint` and scripts with
+`shellcheck -S warning -x scripts/*.sh .github/scripts/*.sh` (both also run as pre-commit hooks).
